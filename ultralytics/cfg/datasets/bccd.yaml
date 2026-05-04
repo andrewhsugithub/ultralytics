@@ -18,4 +18,4 @@ names:
   2: WBC
 
 # Download script/URL (optional)
-download: https://universe.roboflow.com/joseph-nelson/bccd/dataset/3
+download: https://universe.roboflow.com/joseph-nelson/bccd/dataset/3/download/yolov8
