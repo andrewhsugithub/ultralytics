@@ -1,0 +1,21 @@
+# BCCD dataset
+# Example usage: yolo train data=bccd.yaml
+# parent
+# ├── ultralytics
+# └── datasets
+#     └── bccd ← downloads here (9.3 MB)
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: /home/andrew/projects/ultralytics/datasets/bccd # dataset root dir
+train: images/train # train images (relative to 'path') 255 images
+val: images/valid # val images (relative to 'path') 73 images
+test: images/test # test images (relative to 'path') 36 images
+
+# Classes
+names:
+  0: Platelets
+  1: RBC
+  2: WBC
+
+# Download script/URL (optional)
+download: https://universe.roboflow.com/joseph-nelson/bccd/dataset/3
