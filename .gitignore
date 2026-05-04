@@ -204,5 +204,8 @@ calibration_*.npy
 args.yaml
 results.csv
 
-!final/
+!final/**/*.jpg
+!final/**/*.png
+!final/**/*.csv
+!final/**/*.yaml
 !final/**/*.pt
