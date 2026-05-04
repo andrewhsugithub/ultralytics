@@ -9,13 +9,10 @@ def main():
     results = model.train(
         data="bccd.yaml",
         epochs=50,
-        # imgsz=640,
-        # batch=8,
+        batch=8,
         device="cuda",
         name="rtdetr_baseline_run",
         project="/home/andrew/projects/ultralytics/runs",
-        # optimizer="AdamW",
-        # lr0=0.0001,
     )
 
     print(
