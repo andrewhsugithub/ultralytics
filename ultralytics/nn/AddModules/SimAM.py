@@ -10,7 +10,7 @@ class SimAM(torch.nn.Module):
         self.activaton = nn.Sigmoid()
         self.e_lambda = e_lambda
 
-    def _repr_(self):
+    def __repr__(self):
         s = self.__class__.__name__ + "("
         s += "lambda=%f)" % self.e_lambda
         return s
@@ -79,7 +79,7 @@ class HGBlock_SimAM(nn.Module):
         self, c1, cm, c2, k=3, n=6, lightconv=False, shortcut=False, act=nn.ReLU()
     ):
         """Initializes a CSP Bottleneck with 1 convolution using specified input and output channels."""
-        super()._init__()
+        super().__init__()
         block = LightConv if lightconv else Conv
         self.m = nn.ModuleList(
             block(c1 if i == 0 else cm, cm, k=k, act=act) for i in range(n)
