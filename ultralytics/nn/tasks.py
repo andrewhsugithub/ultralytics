@@ -6,6 +6,7 @@ import re
 import types
 from copy import deepcopy
 from pathlib import Path
+from .AddModules import *
 
 import torch
 import torch.nn as nn
@@ -1610,6 +1611,7 @@ def parse_model(d, ch, verbose=True):
             SCDown,
             C2fCIB,
             A2C2f,
+            SimAM,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1668,10 +1670,10 @@ def parse_model(d, ch, verbose=True):
                 legacy = False
         elif m is AIFI:
             args = [ch[f], *args]
-        elif m in frozenset({HGStem, HGBlock}):
+        elif m in frozenset({HGStem, HGBlock, HGBlock_SimAM}):
             c1, cm, c2 = ch[f], args[0], args[1]
             args = [c1, cm, c2, *args[2:]]
-            if m is HGBlock:
+            if m in frozenset({HGBlock, HGBlock_SimAM}):
                 args.insert(4, n)  # number of repeats
                 n = 1
         elif m is ResNetLayer:
