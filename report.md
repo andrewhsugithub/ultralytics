@@ -36,6 +36,32 @@ The baseline model is **RT-DETR-L**, a real-time object detector featuring:
 - **Hybrid Encoder:** Comprising the AIFI transformer encoder and CCFM neck for cross-scale fusion.
 - **RT-DETR Decoder:** Generates bounding boxes and class probabilities via Hungarian matching.
 
+```
+Input Image
+    │
+    ▼
+┌──────────────────────────────┐
+│  HGNetv2 Backbone            │  ← CNN feature extraction
+│  Stage 1 (P2/4)              │     Low-level: edges, textures
+│  Stage 2 (P3/8)              │     Mid-level: shapes, cell boundaries
+│  Stage 3 (P4/16)             │     High-level: semantic regions
+│  Stage 4 (P5/32)             │     Deepest: abstract representations
+└──────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────┐
+│  Hybrid Encoder              │  ← Transformer attention on P5
+│  AIFI (P5 self-attention)    │
+│  CCFM (cross-scale fusion)   │
+└──────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────┐
+│  RTDETRDecoder               │  ← Hungarian matching + predictions
+│  (P3, P4, P5)                │
+└──────────────────────────────┘
+```
+
 > _See [rt-detr-l.yaml](./ultralytics/cfg/models/rt-detr/rt-detr-l.yaml) or [architecture](./assets/architecture) for detailed architecture._
 
 ### 2.2 SimAM Placement Configurations
@@ -133,37 +159,69 @@ Class-Specific mAP50 Comparison Highlighting Small Object Enhancement (Platelets
 | RBCs (Medium) | 0.826 | <u>0.833</u> | +0.007 |
 | WBCs (Large) | 0.975 | <u>0.978</u> | +0.003 |
 
-The most significant finding is that performance gains are heavily concentrated in small-scale objects, directly validating SimAM's role as a targeted signal enhancer. Platelets exhibit the largest absolute gain (`+3.1%`), rising from `0.872` to `0.903` mAP50. This disproportionate improvement confirms that SimAM's statistical distinctiveness mechanism specifically resolves small-object suppression caused by background homogenization and scale imbalance in dense microscopy imagery.
+The most significant finding is that performance gains are **heavily concentrated in small-scale objects**, directly validating SimAM's role as a targeted signal enhancer. Platelets exhibit the largest absolute gain (`+3.1%`), rising from `0.872` to `0.903` mAP50. This disproportionate improvement confirms that SimAM's statistical distinctiveness mechanism specifically resolves small-object suppression caused by background homogenization and scale imbalance in dense microscopy imagery.
 
 ---
 
 ## 4. Discussion: Architectural Placement and Small Object Optimization
 
-### 4.1 The Mechanism of HGBlock Integration
+### 4.1 Why HGBlock Integration Succeeds
 
-The `+3.1%` Platelet gain is not incidental; it stems from SimAM operating in a structurally privileged intermediate zone. At this depth, features have matured enough to exhibit distinct spatial variance but remain sufficiently resolved to preserve small-object morphology. This creates an optimal placement window: too early (Stage 2), noise dominates and boundaries are suppressed; too late (Stage 4), signals are homogenized into abstract semantic pools or may introduce redundancy with the subsequent AIFI transformer encoder. Within HGBlocks, SimAM applies statistical gating across 6–7 successive residual units, performing iterative contrast enhancement. Each block progressively suppresses homogeneous background plasma and amplifies sparse, high-contrast Platelet activations—effectively enhancing the activation magnitude of small-object features for the detection head without introducing learnable parameters or gradient discontinuities.
+The +3.1% Platelet gain is not incidental — it stems from SimAM operating within a structurally privileged zone. Within the HGBlock, SimAM is placed _after intra-block multi-branch aggregation but before the residual shortcut addition_. At this depth, features have matured sufficiently to encode cell morphology (shapes, boundaries, scale) while remaining spatially resolved enough to distinguish individual Platelets from background plasma.
 
-### 4.2 Why Standalone Placement Fails (Stages 2 & 4)
+This creates an optimal placement window: features are neither too primitive (as in Stage 2) nor too abstract (as in Stage 4). Additionally, because SimAM is integrated inside every HGBlock across 6–7 successive residual units in the backbone, it applies **iterative statistical refinement** — each block progressively suppresses homogeneous background activations and amplifies high-contrast Platelet signals. This compounding effect is categorically different from one-time standalone insertion and is the primary mechanism behind the disproportionate Platelet improvement.
 
-The ablation confirms that arbitrary attention insertion is counterproductive due to feature maturity constraints. Early placement at Stage 2 degrades mAP50 by `-7.3%` because SimAM’s energy function relies on spatial variance ($\hat{\sigma}^2$) to isolate distinct features. At this depth, biological structures manifest only as low-contrast gradients and edges; the resulting low variance causes SimAM to suppress smooth cell boundaries while amplifying high-frequency sensor noise and staining artifacts. Conversely, late placement at Stage 4 yields zero gain (`+0.0%`) because heavy downsampling homogenizes spatial features into abstract semantic pools. Here, SimAM’s distinctiveness metric becomes redundant and computationally clashes with the subsequent AIFI transformer encoder, which already performs global self-attention.
+Placing SimAM before the residual shortcut also provides an important structural benefit: gradients flow through both the SimAM-modulated path and the clean shortcut, preventing gradient vanishing or instability that can occur when attention is placed in non-residual positions.
 
-### 4.3 Clinical Precision-Recall Shifts and Lightweight Efficiency
+### 4.2 Why Early Standalone Placement Fails (Cases 4 & 5)
 
-The `+1.3%` Recall increase in Case 7 translates directly into clinically meaningful detection behavior. By amplifying Platelet features, SimAM pushes previously sub-threshold activations above the classification confidence threshold during inference, successfully capturing faint or partially occluded cells that baseline models miss. In automated blood count analysis, minimizing false negatives is critical; this sensitivity shift reduces diagnostic miss rates with only a minor decrease in precision (`−1.0%`), indicating a favorable recall–precision tradeoff. Crucially, these gains are achieved with **zero additional parameters** (~31.9M total) and negligible latency overhead (`~22.7ms` per image), proving that structural integration of parameter-free attention is a highly efficient optimization for edge-deployed medical detectors. The batch size stability effect further confirms that lightweight analytical attention modules benefit significantly from larger training batches in data-scarce biomedical regimes, where cleaner statistical signals compensate for high gradient variance.
+Cases 4 and 5 produce the largest degradations (−6.1% and −7.3% mAP50 respectively), and this result is theoretically predictable rather than surprising.
 
-### 4.4 Batch Size and Statistical Stability
+At Stage 2, the network has processed the image through only one stem block and one set of HGBlocks. Features at this depth encode **low-level spatial information**: edge responses, intensity gradients, and primitive texture patterns. Blood cell boundaries manifest as smooth, low-contrast gradients — spatially _consistent_ with their neighborhood. SimAM's energy function treats spatially consistent activations as low-importance and suppresses them. This means cell boundary signals — the primary localization cue for bounding box regression — are suppressed precisely where they are most needed.
 
-The improvement from Case 6 (B8) (0.900) to Case 7 (B16) (0.905) highlights a subtle interaction between batch normalization and SimAM. Larger batches provide more stable estimates of feature variance ($\sigma^2$), which directly influences the reliability of SimAM's energy function during training. This suggests that lightweight attention modules benefit significantly from larger batch sizes, particularly in data-scarce regimes like BCCD. While Case 6 (B8) demonstrates a clear +0.9% gain over the baseline under identical hyperparameter settings, the further progression to 0.905 mAP50 in Case 7 (B16) suggests a synergistic effect. Because SimAM relies on local feature statistics, it benefits from the stabilized gradient flow and more accurate batch-level feature distributions provided by larger batch sizes.
+Simultaneously, high-frequency noise from microscopy sensors and JPEG staining artifacts appear as statistically _anomalous_ activations that SimAM's energy function amplifies. The network must then "unlearn" these noise amplifications in subsequent stages, consuming representational capacity that should be allocated to cell detection.
 
----
+Case 5 compounds this damage by adding a second misplaced SimAM after the AIFI encoder. The already-degraded features from Stage 2 propagate through the backbone and transformer, and applying SimAM again on corrupted representations produces the worst result of all configurations. This demonstrates that **stacking misplaced attention modules amplifies degradation non-linearly** — two bad placements are worse than the sum of their individual effects.
+
+### 4.3 Why Late Standalone Placement Yields No Gain (Case 3)
+
+Case 3 places SimAM after the final backbone HGBlock (Stage 4, P5/32). At this resolution, each spatial feature cell corresponds to a 32×32px receptive field in the original image — far coarser than individual Platelets (8–15px). The spatial variance across the P5 feature map is low because fine-grained cell distinctions have been pooled into abstract semantic representations.
+
+SimAM's energy function requires meaningful spatial variance ($\hat{\sigma}^2$) to assign differential attention weights. At P5/32, this variance is insufficient, and the energy function produces near-uniform weights — effectively a no-op. Furthermore, Stage 4 output feeds directly into AIFI, which already performs global self-attention across all spatial positions. SimAM's role at this point is entirely redundant, adding inference overhead without complementary benefit.
+
+### 4.4 Precision-Recall Trade-off and Clinical Relevance
+
+The precision-recall shift between Baseline B16 (Case 2) and HGBlock SimAM B16 (Case 7) merits specific attention:
+
+| Metric    | Baseline B16 | HGBlock SimAM B16 | Δ      |
+| --------- | ------------ | ----------------- | ------ |
+| Precision | 0.835        | 0.825             | −0.010 |
+| Recall    | 0.870        | 0.883             | +0.013 |
+| mAP50     | 0.884        | 0.905             | +0.021 |
+
+The +1.3% Recall gain reflects a sensitivity increase: SimAM amplifies Platelet feature activations, pushing previously sub-threshold detections above the confidence cutoff and successfully capturing cells the baseline missed (fewer false negatives). The −1.0% Precision dip is a natural consequence — increased sensitivity also catches some near-threshold background activations that are not true cells (slightly more false positives).
+
+In automated blood count analysis, **this trade-off is clinically favorable**. Missing a Platelet (false negative) has greater diagnostic consequences than spuriously flagging a background region (false positive). The mAP50 increase of +2.1% confirms that overall detection quality — evaluated across all confidence thresholds — is substantially higher with SimAM, indicating this is a genuine improvement rather than threshold manipulation.
+
+### 4.5 Batch Size and Statistical Stability of SimAM
+
+The improvement from B8 (0.900) to B16 (0.905) arises from an interaction between Batch Normalization and SimAM's energy function. During training, BN estimates running mean and variance statistics across the batch. Larger batches produce more stable BN estimates, which in turn produce more consistent feature map distributions ($\hat{\mu}$, $\hat{\sigma}^2$) at each SimAM application point.
+
+Because SimAM's attention weights are computed analytically from these feature statistics, more stable BN estimates yield more reliable attention weights throughout training — a smoother energy function landscape that converges to a better optimum. This effect is particularly pronounced in data-scarce settings (BCCD has a small training set), where gradient estimates are inherently noisy and any stabilizing mechanism has an outsized effect. This suggests a practical guideline: **when using SimAM in low-data biomedical regimes, prefer the largest batch size that fits in GPU memory.**
 
 ## 5. Conclusion
 
-This study demonstrates that lightweight, parameter-free attention can effectively address the persistent challenge of small object detection in biomedical imaging. By integrating SimAM into RT-DETR-L, we achieved a **+3.1% mAP50 improvement in Platelet detection** (8–15px diameter) without introducing learnable weights or increasing inference latency. This confirms that analytical attention mechanisms can serve as targeted signal enhancers for sparse, high-contrast objects, successfully overcoming background homogenization and scale imbalance inherent to dense microscopy imagery.
+This study demonstrates that lightweight, parameter-free attention can effectively address small object detection in biomedical imaging — but only when placement is treated as a first-class architectural decision rather than an afterthought.
 
-Our systematic ablation further validates that realizing these gains is strictly dependent on architectural placement. Standalone insertion at early (Stage 2) or late (Stage 4) network depths degrades performance by up to 7.3% or yields zero improvement, respectively, due to premature feature suppression and semantic redundancy with the transformer encoder. In contrast, deep integration within HGBlock residual pathways enables iterative statistical refinement across multiple receptive fields, preserving gradient flow while progressively amplifying small-object activations. This confirms that placement should be treated as a critical architectural design choice rather than a simple tunable hyperparameter.
+By integrating SimAM inside RT-DETR-L's HGBlock residual units, we achieved a **+3.1% mAP50 improvement in Platelet detection** (8–15px) and **+2.1% overall mAP50** without introducing learnable weights, additional parameters, or meaningful inference latency. These gains are driven by iterative statistical contrast enhancement across 6–7 backbone stages, which progressively amplifies sparse small-object signals while suppressing homogeneous background activations.
 
-The resulting configuration achieves **+2.1% overall mAP50** with **zero additional parameters**, shifting detection sensitivity toward clinically critical false-negative reduction while maintaining edge-deployment efficiency. These findings establish SimAM as a highly viable, lightweight plug-and-play intervention for real-time medical detectors, demonstrating that targeted architectural placement can significantly enhance small object localization without compromising computational constraints or model complexity. Future work should validate these findings on larger-scale and more diverse datasets to confirm generalization beyond the BCCD dataset.
+Our ablation identifies three placement principles with clear theoretical grounding:
+
+1. **Feature maturity is a prerequisite.** SimAM's energy function requires spatially mature features with sufficient variance. Applying it before this threshold (Stage 2) suppresses localization signals and amplifies noise.
+2. **Integration outperforms insertion.** Embedding SimAM within residual blocks enables compounding iterative refinement that one-time standalone placement cannot replicate at any network depth.
+3. **Redundancy with existing attention is wasteful.** Placing SimAM adjacent to AIFI's global self-attention (Stage 4) produces zero gain due to overlapping function.
+
+The final configuration achieves **0.905 mAP50 at ~31.9M parameters**. These findings establishes SimAM as a highly viable, lightweight plug-and-play intervention for real-time medical detectors, demonstrating that targeted architectural placement can significantly enhance small object localization without compromising computational constraints or model complexity. Future work should validate these findings on larger-scale and more diverse datasets to confirm generalization beyond the BCCD dataset.
 
 ---
 

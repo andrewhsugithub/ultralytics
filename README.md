@@ -1,3 +1,7 @@
+## Techinical Report
+
+[Enhancing Small Object Detection with Lightweight Attention: Structural Optimization of SimAM in RT-DETR-L](./report.md)
+
 ## Reproduction Instructions
 
 CUDA needed for training. Tested on CUDA 13 with Python 12 on a NVIDIA RTX 4070.
