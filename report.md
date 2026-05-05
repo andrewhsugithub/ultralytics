@@ -64,7 +64,7 @@ Input Image
 └──────────────────────────────┘
 ```
 
-> _See [rt-detr-l.yaml](./ultralytics/cfg/models/rt-detr/rt-detr-l.yaml) or [architecture](./assets/architecture) for detailed architecture._
+> _See [rtdetr-l.yaml](./ultralytics/cfg/models/rt-detr/rtdetr-l.yaml) or [architecture](./assets/architecture) for detailed architecture._
 
 ### 2.2 SimAM Placement Configurations
 
