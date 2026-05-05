@@ -1,7 +1,9 @@
 # Enhancing Small Object Detection with Lightweight Attention: Structural Optimization of SimAM in RT-DETR-L
 
 **Dataset:** BCCD (Blood Cell Count and Detection)
+
 **Baseline Model:** RT-DETR-L (CVPR 2024)
+
 **Attention Module:** SimAM (ICML 2021)
 
 ## Abstract
