@@ -86,7 +86,7 @@ All runs utilized identical/default hyperparameters to ensure fair comparison:
 - **GPU**: NVIDIA RTX 4070
 - All experiments used identical training hyperparameters (learning rate, optimizer, augmentation pipeline) to ensure a controlled comparison across configurations.
 
-> _See [bccd.yaml](./ultralytics/cfg/datasets/bccd.yaml) for detailed architecture._
+> _See [bccd.yaml](./ultralytics/cfg/datasets/bccd.yaml) for detailed configuration._
 
 ---
 
